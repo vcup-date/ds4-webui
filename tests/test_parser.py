@@ -90,7 +90,7 @@ class TestSessionList(unittest.TestCase):
         # The pty pipeline strips per-line indent before this parser sees the
         # block. Real-world block as it arrives:
         block = (
-            "saved sessions in /Users/gpro/.ds4/kvcache:\n"
+            "saved sessions in /home/user/.ds4/kvcache:\n"
             "9409d276 (2h ago) find today tesla stock price  [7424 tokens, 120.4 MiB]\n"
             "f55b1d1a (2h ago) what is today's tesla stock price  [4501 tokens, 82.0 MiB]\n"
             "50447cb5 (2h ago) what can you do  [5970 tokens, 101.2 MiB]\n"
