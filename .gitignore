@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local, machine-specific runtime state (defaults live in settings.py)
+settings.json
+settings.json.bak
+settings.json.tmp
+
+# Editor / OS
+.DS_Store

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ds4-web</title>
+<link rel="stylesheet" href="/static/vendor/hljs.css" />
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <span class="logo">◉</span>
+        <span class="brand-name">ds4-web</span>
+        <span class="brand-sub">native agent</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="conn-badge" id="conn-badge" data-state="disconnected" title="WebSocket to ds4-web server">
+        <span class="dot"></span>
+        <span id="conn-label">connecting…</span>
+    </div>
+    <div class="agent-state-badge" id="agent-state-badge" data-state="stopped" title="ds4-agent process state">
+        <span class="dot" id="agent-dot"></span>
+        <span id="agent-state-label">stopped</span>
+    </div>
+    <button class="icon-btn" id="btn-theme" title="Toggle theme">☾</button>
+    <button class="icon-btn" id="btn-restart" title="Restart agent">⟳</button>
+    <button class="icon-btn" id="btn-settings" title="Settings">⚙</button>
+</header>
+
+<main class="layout">
+    <aside class="sidebar sidebar-sessions">
+        <div class="sidebar-head">
+            <h3>Sessions</h3>
+            <div class="sidebar-head-actions">
+                <button class="link-btn" id="btn-new-session" title="Start a new session">＋ new</button>
+                <button class="link-btn" id="btn-prune-sessions" title="Keep only the last 5">prune</button>
+                <button class="link-btn" id="btn-refresh-sessions" title="Refresh">↻</button>
+            </div>
+        </div>
+        <ul class="sessions-list" id="sessions-list">
+            <li class="session-empty">no saved sessions yet</li>
+        </ul>
+    </aside>
+
+    <section class="conversation">
+        <div class="messages" id="messages">
+            <div class="empty-state">
+                <h2>Start a conversation</h2>
+                <p>Send a prompt, or use a slash command like <code>/list</code> or <code>/history</code>.</p>
+            </div>
+        </div>
+        <div class="composer">
+            <div class="composer-row">
+                <textarea id="composer-input" placeholder="Send a prompt or /command  (Enter to send, Shift+Enter for newline)" rows="1" autocomplete="off"></textarea>
+                <button class="primary-btn" id="btn-send" title="Send">Send</button>
+            </div>
+            <div class="status-strip">
+                <span class="status-pill" id="state-pill" data-state="idle">
+                    <span class="dot"></span>
+                    <span id="status-state">idle</span>
+                </span>
+                <span class="status-ctx">
+                    <span class="status-ctx-label">ctx</span>
+                    <span class="status-ctx-gauge"><span class="ctx-fill" id="ctx-fill"></span></span>
+                    <span class="status-ctx-num"><span id="ctx-used">0</span>/<span id="ctx-size">0</span></span>
+                </span>
+                <span class="status-prefill" id="prefill-block" hidden>
+                    <span class="status-ctx-label">prefill</span>
+                    <span class="status-ctx-gauge"><span class="prefill-fill" id="prefill-fill"></span></span>
+                    <span class="status-ctx-num"><span id="prefill-done">0</span>/<span id="prefill-total">0</span></span>
+                </span>
+                <span class="status-speed" id="speed-block" hidden>
+                    <span id="speed-tps">0.0</span><span class="status-suffix">&nbsp;t/s</span>
+                    <span class="status-speed-tok"><span id="speed-gen">0</span> tok</span>
+                </span>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- Settings drawer -->
+<div class="drawer-backdrop" id="settings-backdrop" hidden></div>
+<aside class="drawer" id="settings-drawer" hidden>
+    <div class="drawer-head">
+        <h2>Settings</h2>
+        <button class="icon-btn" id="btn-settings-close">✕</button>
+    </div>
+    <form class="drawer-body" id="settings-form" autocomplete="off">
+        <p class="drawer-note">
+            Most settings are passed to <code>ds4-agent</code> at launch, so saving
+            them <strong>restarts the agent</strong> (your session KV is preserved on
+            disk). Interface settings apply instantly.
+        </p>
+
+        <fieldset>
+            <legend>Model <span class="restart-tag" title="Changing this restarts the agent">restart</span></legend>
+            <label>agent binary
+                <input type="text" name="agent_path" spellcheck="false" />
+            </label>
+            <label>model GGUF
+                <input type="text" name="model" spellcheck="false" />
+            </label>
+        </fieldset>
+
+        <fieldset>
+            <legend>Context &amp; length <span class="restart-tag">restart</span></legend>
+            <label class="slider">
+                <span class="slabel">context window <span class="readout" id="ctx-readout">200k</span></span>
+                <input type="range" name="ctx_size" min="4096" max="1048576" step="4096" id="ctx-range" />
+            </label>
+            <p class="hint">Total token window (system + history + KV). KV memory ≈ <span id="kv-est">~5 GB</span>.</p>
+            <label class="slider">
+                <span class="slabel">max tokens / turn <span class="readout" id="maxtok-readout">50k</span></span>
+                <input type="range" name="max_tokens" min="256" max="200000" step="256" id="maxtok-range" />
+            </label>
+            <p class="hint">Hard cap on tokens generated in a single reply before the agent stops.</p>
+        </fieldset>
+
+        <fieldset>
+            <legend>Reasoning <span class="restart-tag">restart</span></legend>
+            <label class="opt"><input type="radio" name="think_mode" value="off" />
+                <span><strong>off</strong> — answer directly, no thinking</span></label>
+            <label class="opt"><input type="radio" name="think_mode" value="normal" />
+                <span><strong>normal</strong> — think before answering <span class="hint">(default)</span></span></label>
+            <label class="opt"><input type="radio" name="think_mode" value="max" />
+                <span><strong>max</strong> — extended thinking when context allows</span></label>
+        </fieldset>
+
+        <fieldset>
+            <legend>Sampling <span class="restart-tag">restart</span></legend>
+            <div class="presets" id="sampling-presets">
+                <button type="button" data-temp="0.2" data-top_p="0.95" data-min_p="0.05">Precise</button>
+                <button type="button" data-temp="0.6" data-top_p="0.95" data-min_p="0.05">Balanced</button>
+                <button type="button" data-temp="1.0" data-top_p="1.0" data-min_p="0.05">Creative</button>
+            </div>
+            <label class="slider">
+                <span class="slabel">temperature <span class="readout" id="temp-readout">1.00</span></span>
+                <input type="range" name="temp" min="0" max="2" step="0.05" id="temp-range" />
+            </label>
+            <p class="hint">Higher = more random &amp; creative; lower = more focused &amp; repeatable.</p>
+            <label class="slider">
+                <span class="slabel">top-p <span class="readout" id="topp-readout">1.00</span></span>
+                <input type="range" name="top_p" min="0.05" max="1" step="0.01" id="topp-range" />
+            </label>
+            <p class="hint">Nucleus sampling: only consider the most likely tokens up to this cumulative probability.</p>
+            <label class="slider">
+                <span class="slabel">min-p <span class="readout" id="minp-readout">0.05</span></span>
+                <input type="range" name="min_p" min="0" max="0.5" step="0.01" id="minp-range" />
+            </label>
+            <p class="hint">Drop tokens below this fraction of the top token's probability.</p>
+            <label class="row">
+                <span>seed <span class="hint">(0 = random)</span></span>
+                <input type="number" name="seed" min="0" />
+            </label>
+            <p class="hint">ds4-agent supports only temp / top-p / min-p / seed — no top-k, penalties, or grammar.</p>
+        </fieldset>
+
+        <fieldset>
+            <legend>Speculative decoding (MTP) <span class="restart-tag">restart</span></legend>
+            <label class="row">
+                <input type="checkbox" name="mtp_enabled" /> <span>enabled <span class="hint">— faster, identical output</span></span>
+            </label>
+            <label>draft model GGUF
+                <input type="text" name="mtp_path" spellcheck="false" />
+            </label>
+            <label class="row">
+                <span>draft tokens</span>
+                <input type="number" name="mtp_draft" min="1" max="4" />
+            </label>
+            <label class="row">
+                <span>verifier margin</span>
+                <input type="number" name="mtp_margin" min="0" max="64" step="0.5" />
+            </label>
+        </fieldset>
+
+        <fieldset>
+            <legend>System prompt <span class="restart-tag">restart</span></legend>
+            <textarea name="system_extra" rows="4" placeholder="Optional extra system prompt appended to the agent default."></textarea>
+        </fieldset>
+
+        <details class="adv">
+            <summary>Advanced / performance <span class="restart-tag">restart</span></summary>
+            <fieldset>
+                <label class="row">
+                    <span>backend</span>
+                    <select name="backend">
+                        <option value="auto">auto-detect</option>
+                        <option value="metal">metal</option>
+                        <option value="cuda">cuda</option>
+                        <option value="cpu">cpu</option>
+                    </select>
+                </label>
+                <label class="row">
+                    <span>CPU threads <span class="hint">(0 = auto)</span></span>
+                    <input type="number" name="threads" min="0" max="256" />
+                </label>
+                <label class="row">
+                    <input type="checkbox" name="quality" /> <span>quality kernels <span class="hint">— prefer exact, slower kernels</span></span>
+                </label>
+                <label class="row">
+                    <input type="checkbox" name="warm_weights" /> <span>warm weights <span class="hint">— pre-touch tensor pages at start</span></span>
+                </label>
+                <label class="slider">
+                    <span class="slabel">GPU power <span class="readout" id="power-readout">100%</span></span>
+                    <input type="range" name="power" min="1" max="100" step="1" id="power-range" />
+                </label>
+                <p class="hint">Target GPU duty cycle. Lower = cooler/quieter but slower (100% = full speed).</p>
+            </fieldset>
+        </details>
+
+        <fieldset>
+            <legend>Interface <span class="instant-tag">instant</span></legend>
+            <label class="row">theme
+                <select name="ui_theme">
+                    <option value="dark">dark</option>
+                    <option value="light">light</option>
+                </select>
+            </label>
+            <label class="row">
+                <input type="checkbox" name="autosave" /> <span>auto-save session after each turn</span>
+            </label>
+        </fieldset>
+
+        <div class="drawer-foot">
+            <button type="button" class="ghost-btn" id="btn-settings-reset" title="Reset all fields to defaults">Reset defaults</button>
+            <button type="button" class="ghost-btn" id="btn-settings-discard">Discard</button>
+            <button type="submit" class="primary-btn" id="btn-settings-apply">Apply</button>
+        </div>
+    </form>
+</aside>
+
+<!-- Toast container -->
+<div class="toasts" id="toasts"></div>
+
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/highlight.min.js"></script>
+<script src="/static/render.js"></script>
+<script src="/static/app.js"></script>
+
+</body>
+</html>
