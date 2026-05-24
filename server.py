@@ -4,12 +4,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 import settings as settings_mod
@@ -72,10 +73,28 @@ class NoCacheStaticFiles(StaticFiles):
 app.mount("/static", NoCacheStaticFiles(directory=str(STATIC)), name="static")
 
 
+def _versioned_index() -> str:
+    """Serve index.html with a cache-busting ?v=<mtime> on each local asset,
+    so an edited render.js/app.js/style.css is always re-fetched even if a
+    stale copy lingers in the browser cache."""
+    html = (STATIC / "index.html").read_text()
+
+    def stamp(m: "re.Match") -> str:
+        attr, path = m.group(1), m.group(2)
+        fp = STATIC / path.lstrip("/").removeprefix("static/")
+        try:
+            v = int(fp.stat().st_mtime)
+        except OSError:
+            return m.group(0)
+        return f'{attr}="/static/{fp.relative_to(STATIC).as_posix()}?v={v}"'
+
+    return re.sub(r'(src|href)="/static/([^"?]+)"', stamp, html)
+
+
 @app.get("/")
 async def index():
-    return FileResponse(
-        str(STATIC / "index.html"),
+    return HTMLResponse(
+        _versioned_index(),
         headers={"cache-control": "no-store, must-revalidate",
                  "pragma": "no-cache"},
     )
