@@ -819,6 +819,22 @@ details.adv > summary {
 details.adv > summary:hover { color: var(--text-dim); }
 details.adv fieldset { margin-top: 8px; }
 
+/* Web-tool activity notes (what the background Chrome is doing) */
+.web-note {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 4px 0;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--accent);
+    background: rgba(88, 166, 255, 0.05);
+    border-radius: 0 4px 4px 0;
+    overflow-wrap: anywhere;
+}
+.web-note-icon { flex: none; }
+
 /* Web-tool approval modal */
 .approval-backdrop {
     position: fixed;

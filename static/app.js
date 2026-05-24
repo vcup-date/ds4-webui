@@ -19,7 +19,18 @@
     activeSha: null,           // explicitly-selected session; null = use newest
     freshSession: false,       // true after "+ new" until the first save lands
     preNewTopSha: null,        // top SHA at the moment we went fresh
+    restored: false,           // have we restored history on this page load yet
+    restorePending: false,     // history fetch in flight; buffer live events
+    restoreQueue: [],          // live events deferred until restore finishes
   };
+
+  // Live-stream events that must be deferred while history is being restored,
+  // so an in-flight fetch's renderTurns() doesn't wipe a freshly-built turn.
+  const STREAM_EVENTS = new Set([
+    "token", "tool", "tool_start", "tool_param_start", "tool_param_delta",
+    "tool_param_end", "tool_end", "tool_error", "turn_start", "turn_end",
+    "web_activity",
+  ]);
 
   // ---------- toast ----------
   function toast(text, kind = "info", timeout = 3500) {
@@ -97,6 +108,12 @@
   // ---------- events ----------
 
   function handleEvent(m) {
+    // While restoring saved history, hold live stream events and replay them
+    // once the conversation has been rebuilt.
+    if (state.restorePending && STREAM_EVENTS.has(m.t)) {
+      state.restoreQueue.push(m);
+      return;
+    }
     switch (m.t) {
       case "agent_state":  onAgentState(m); break;
       case "status":       onStatus(m); break;
@@ -112,6 +129,7 @@
       case "tool_error":   onToolError(m); break;
       case "approval":     onApproval(m); break;
       case "approval_clear": hideApproval(); break;
+      case "web_activity": onWebActivity(m); break;
       case "tool_inline":  /* terminal-only render, ignore */ break;
       case "system":       onSystem(m); break;
       case "sessions":     onSessions(m); break;
@@ -129,9 +147,9 @@
     badge.dataset.state = m.state;
     $("#agent-state-label").textContent = m.state;
     if (m.state === "running") {
-      // Refresh the sessions sidebar; the agent's KV state survives a page
-      // reload but the chat-area DOM doesn't (we don't try to replay
-      // history into the chat — the saved KV is the agent's truth).
+      // Refresh the sessions sidebar. The first response also drives the
+      // history restore in onSessions, so a page reload rebuilds the current
+      // conversation from the saved KV rather than showing a blank page.
       send({ t: "refresh_sessions" });
     }
   }
@@ -229,6 +247,11 @@
     throttledScroll();
   }
 
+  function onWebActivity(m) {
+    DS4Render.appendWebNote(ensureAssistantTurn(), m.text);
+    throttledScroll();
+  }
+
   // ---------- web-tool approval ----------
 
   let approvalTimer = null;
@@ -292,7 +315,34 @@
         state.activeSha = topSha;
       }
     }
+    // On the first sessions load after a page (re)load, restore the current
+    // (newest) session into the conversation so a refresh shows history
+    // instead of a blank, ambiguous page. The agent is already on this
+    // session, so we only load history — no /switch.
+    if (!state.restored && !state.freshSession && state.sessions.length) {
+      state.restored = true;
+      state.activeSha = state.sessions[0].sha;
+      loadHistoryOnly(state.sessions[0].sha);
+    }
     renderSessions();
+  }
+
+  async function loadHistoryOnly(sha) {
+    state.restorePending = true;
+    state.currentAssistantTurn = null;
+    try {
+      const r = await fetch(`/api/sessions/${sha}/history`);
+      const data = await r.json();
+      renderTurns(data.turns || []);
+    } catch (e) {
+      // Non-fatal: a blank conversation is acceptable if history is unreadable.
+    } finally {
+      state.restorePending = false;
+      const queued = state.restoreQueue;
+      state.restoreQueue = [];
+      for (const ev of queued) handleEvent(ev);
+      renderSessions();
+    }
   }
 
   function renderSessions() {
@@ -463,14 +513,16 @@
   }
 
   function sendInput() {
-    const input = $("#composer-input");
-    const text = input.value;
-    if (!text.trim()) return;
+    // While generating, the button is Stop and must work regardless of the
+    // input box (which is empty after a prompt is sent, or after a refresh).
+    // This check has to come before the empty-text guard below.
     if (state.inGeneration) {
-      // Treat send button as stop while generating.
       send({ t: "interrupt" });
       return;
     }
+    const input = $("#composer-input");
+    const text = input.value;
+    if (!text.trim()) return;
     const isSlash = /^\s*\//.test(text);
     if (isSlash) {
       // Normalize: collapse leading slashes ("//switch" → "/switch"), trim.

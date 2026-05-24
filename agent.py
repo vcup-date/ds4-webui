@@ -855,6 +855,13 @@ class AgentProcess:
             self._dispatch({"t": "prefill_meta", "raw": ev.raw})
             return
         if isinstance(ev, p.MetaEvent):
+            # The agent traces its browser activity as "web: ..." lines. The
+            # Chrome window opens in the background where it's hard to watch,
+            # so surface these so the user can see what the web tool is doing.
+            if ev.raw.startswith("web:"):
+                self._dispatch({"t": "web_activity",
+                                "text": ev.raw[len("web:"):].strip()})
+                return
             self._dispatch({"t": "trace_meta", "raw": ev.raw})
             return
 

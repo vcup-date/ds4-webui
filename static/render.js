@@ -364,6 +364,18 @@
     });
   }
 
+  function appendWebNote(turn, text) {
+    // A line of browser activity (URL visited, page ready, click, extraction).
+    // The Chrome window itself is in the background, so this is how the user
+    // follows what the web tool is doing.
+    if (!text) return;
+    const note = el("div", { class: "web-note" },
+      el("span", { class: "web-note-icon", text: "🌐" }),
+      el("span", { text: text }),
+    );
+    turn.appendChild(note);
+  }
+
   function appendToolError(turn, { detail }) {
     const card = el("div", { class: "tool-card error", dataset: { phase: "error" } },
       el("div", { class: "tool-card-head" },
@@ -386,6 +398,7 @@
     appendContent,
     appendToolInvoke,
     appendToolError,
+    appendWebNote,
     toolStreamStart,
     toolStreamParamStart,
     toolStreamDelta,
