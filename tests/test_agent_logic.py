@@ -82,5 +82,50 @@ class TestPtyEventHandling(unittest.TestCase):
         self.assertIn("saved session abc12345", slash[0]["text"])
 
 
+class TestWebApproval(unittest.TestCase):
+    """The browser-tool y/n approval prompt is detected from the raw pty
+    stream and answered by writing a y/n line back."""
+
+    def test_detects_prompt_and_allows(self):
+        events: list = []
+        a = make_agent(events)
+        writes: list = []
+        a._write = lambda s: writes.append(s)
+        a._scan_approval(
+            "The web tool wants to start a visible Chrome browser. "
+            "Allow? (y/n) [auto-no in 30s] ")
+        appr = [e for e in events if e["t"] == "approval"]
+        self.assertEqual(len(appr), 1)
+        self.assertIn("(y/n)", appr[0]["message"])
+        self.assertTrue(a._approval_active)
+        a.answer_approval(True)
+        self.assertEqual(writes, ["y\n"])
+        self.assertFalse(a._approval_active)
+        self.assertTrue(any(e["t"] == "approval_clear" for e in events))
+
+    def test_deny_writes_n_line(self):
+        events: list = []
+        a = make_agent(events)
+        writes: list = []
+        a._write = lambda s: writes.append(s)
+        a._scan_approval("Start visible Chrome browser? (y/n) ")
+        a.answer_approval(False)
+        self.assertEqual(writes, ["n\n"])
+
+    def test_does_not_double_fire_while_active(self):
+        events: list = []
+        a = make_agent(events)
+        a._write = lambda s: None
+        a._scan_approval("Allow? (y/n) ")
+        a._scan_approval("still pending (y/n) ")
+        self.assertEqual(len([e for e in events if e["t"] == "approval"]), 1)
+
+    def test_normal_output_does_not_trigger(self):
+        events: list = []
+        a = make_agent(events)
+        a._scan_approval("here is some normal model output, nothing to approve\n")
+        self.assertFalse(any(e["t"] == "approval" for e in events))
+
+
 if __name__ == "__main__":
     unittest.main()

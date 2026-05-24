@@ -231,6 +231,19 @@
     </form>
 </aside>
 
+<!-- Web-tool approval modal -->
+<div class="approval-backdrop" id="approval-backdrop" hidden></div>
+<div class="approval-modal" id="approval-modal" hidden role="dialog" aria-modal="true" aria-labelledby="approval-title">
+    <div class="approval-icon">🌐</div>
+    <h3 id="approval-title">Web tool approval</h3>
+    <p class="approval-message" id="approval-message"></p>
+    <p class="approval-timer" id="approval-timer"></p>
+    <div class="approval-actions">
+        <button type="button" class="ghost-btn" id="approval-deny">Deny</button>
+        <button type="button" class="primary-btn" id="approval-allow">Allow</button>
+    </div>
+</div>
+
 <!-- Toast container -->
 <div class="toasts" id="toasts"></div>
 

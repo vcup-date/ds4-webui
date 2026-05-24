@@ -819,6 +819,48 @@ details.adv > summary {
 details.adv > summary:hover { color: var(--text-dim); }
 details.adv fieldset { margin-top: 8px; }
 
+/* Web-tool approval modal */
+.approval-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 100;
+}
+.approval-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 101;
+    width: min(420px, calc(100vw - 40px));
+    background: var(--bg-elev);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 22px 22px 18px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+.approval-backdrop[hidden], .approval-modal[hidden] { display: none; }
+.approval-modal .approval-icon { font-size: 30px; }
+.approval-modal h3 { margin: 8px 0 6px; font-size: 16px; }
+.approval-message {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0 0 8px;
+}
+.approval-timer {
+    color: var(--text-mute);
+    font-size: 12px;
+    margin: 0 0 16px;
+}
+.approval-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+.approval-actions button { min-width: 96px; }
+
 /* toasts */
 .toasts {
     position: fixed;

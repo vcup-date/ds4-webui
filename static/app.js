@@ -110,6 +110,8 @@
       case "tool_param_end":   /* no-op; section already complete */ break;
       case "tool_end":         onToolEnd(m); break;
       case "tool_error":   onToolError(m); break;
+      case "approval":     onApproval(m); break;
+      case "approval_clear": hideApproval(); break;
       case "tool_inline":  /* terminal-only render, ignore */ break;
       case "system":       onSystem(m); break;
       case "sessions":     onSessions(m); break;
@@ -225,6 +227,43 @@
   function onToolEnd() {
     DS4Render.toolStreamEnd(ensureAssistantTurn());
     throttledScroll();
+  }
+
+  // ---------- web-tool approval ----------
+
+  let approvalTimer = null;
+
+  function onApproval(m) {
+    $("#approval-message").textContent = m.message || "Allow the web tool to start a browser?";
+    const backdrop = $("#approval-backdrop");
+    const modal = $("#approval-modal");
+    backdrop.hidden = false;
+    modal.hidden = false;
+    // Mirror the agent's auto-deny timeout so the dialog can't linger after
+    // the agent has already moved on. We do NOT send anything on timeout; the
+    // agent denies on its own. Hide a touch late to avoid a stray keystroke.
+    let remaining = (m.timeout || 30);
+    const tick = () => {
+      $("#approval-timer").textContent = `Auto-deny in ${remaining}s`;
+      if (remaining <= 0) { hideApproval(); return; }
+      remaining -= 1;
+    };
+    clearInterval(approvalTimer);
+    tick();
+    approvalTimer = setInterval(tick, 1000);
+  }
+
+  function hideApproval() {
+    clearInterval(approvalTimer);
+    approvalTimer = null;
+    $("#approval-backdrop").hidden = true;
+    $("#approval-modal").hidden = true;
+  }
+
+  function answerApproval(allow) {
+    if ($("#approval-modal").hidden) return;
+    send({ t: "approval_answer", allow: allow });
+    hideApproval();
   }
 
   function onToolError(m) {
@@ -636,6 +675,9 @@
     $("#btn-settings-discard").addEventListener("click", closeSettings);
     $("#settings-backdrop").addEventListener("click", closeSettings);
     $("#settings-form").addEventListener("submit", applySettings);
+
+    $("#approval-allow").addEventListener("click", () => answerApproval(true));
+    $("#approval-deny").addEventListener("click", () => answerApproval(false));
 
     // Any field change updates the slider readouts and the Apply button label.
     $("#settings-form").addEventListener("input", () => {

@@ -43,6 +43,8 @@ DS4_WEB_NO_OPEN=1     ./run.sh   # do not auto-open the browser
 
 **Stop.** The Send button turns into Stop while the agent is generating. Clicking it interrupts the current turn without throwing away the session, so you can send a new prompt and keep going.
 
+**Web-tool approval.** Newer `ds4-agent` has browser-backed web tools that open a visible Chrome window, and it asks for a yes or no before starting one. The wrapper catches that prompt and shows an Allow or Deny dialog with the agent's 30 second auto-deny countdown. The Chrome window itself opens on your desktop. The wrapper only handles the approval, and if you do nothing the agent denies on its own.
+
 **Slash commands.** Anything you type starting with `/` is sent to the agent as a command rather than a prompt. The useful ones are `/save`, `/new`, `/list`, `/switch <sha>`, `/history`, and `/help`. Most of these have buttons in the UI too, so you rarely need to type them.
 
 **Sessions.** Every conversation is a session, stored in the agent's KV cache on disk. The left sidebar lists them, newest first, with a short SHA, an age, and a token count. Click any session to switch to it instantly (the agent reloads its saved KV, so there is no reprefill). The `+ new` button starts a fresh conversation and drops a placeholder row at the top until the first prompt is saved. Autosave is on by default, so a session is saved after each turn; you can also save by hand with `/save`. The `prune` button keeps only the last five, and each row has a delete button on hover.

@@ -259,6 +259,15 @@ class AgentProcess:
         self._slash_quiescent_s: float = 0.6
         self._slash_last_at: float = 0.0
 
+        # Web-tool approval prompt detection. When the model calls a browser
+        # tool, ds4-agent stops the line editor and prints a y/n prompt on the
+        # pty (with a 30s auto-no timeout). We scan the raw pty stream for it,
+        # surface a confirmation dialog in the browser, and write back y/n.
+        self._approval_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        self._approval_buf = ""
+        self._approval_active = False
+        self._approval_at = 0.0
+
         # Trace state machine
         self._thinking = p.ThinkingState()
         self._dsml = p.DsmlStreamState()
@@ -375,6 +384,10 @@ class AgentProcess:
         self._in_slash = False
         self._thinking = p.ThinkingState()
         self._was_generating = False
+        # Reset web-tool approval detection for the fresh process.
+        self._approval_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        self._approval_buf = ""
+        self._approval_active = False
 
         self._readers = [
             threading.Thread(target=self._pty_reader, name="ds4-pty-reader", daemon=True),
@@ -566,6 +579,15 @@ class AgentProcess:
                 break
             if self._ptyscreen is None:
                 continue
+            # Scan the raw stream for the web-tool approval prompt first. It is
+            # printed with the line editor stopped, so it never arrives as a
+            # normal prompt-redraw event — we must catch it directly.
+            try:
+                atext = self._approval_decoder.decode(chunk)
+                if atext:
+                    self._scan_approval(atext)
+            except Exception as e:
+                log.warning("approval scan error (continuing): %s", e)
             # A parsing/emulation glitch must never kill the reader thread —
             # that would freeze the whole UI. Swallow and keep reading.
             try:
@@ -574,6 +596,36 @@ class AgentProcess:
                     self._handle_pty_event(ev)
             except Exception as e:
                 log.warning("pty event handling error (continuing): %s", e)
+
+    # ds4-agent's prompt: "...Allow? (y/n) [auto-no in 30s] ". The message text
+    # varies, but it always ends in "(y/n)" and the agent reads a y/n line.
+    _APPROVAL_RE = re.compile(r"([^\r\n]*?\(y/n\))", re.IGNORECASE)
+
+    def _scan_approval(self, text: str) -> None:
+        self._approval_buf = (self._approval_buf + text)[-1024:]
+        # Re-arm if a stale approval never resolved (timed out after ~30s).
+        if self._approval_active and (time.monotonic() - self._approval_at) > 35.0:
+            self._approval_active = False
+        if self._approval_active:
+            return
+        clean = p.strip_ansi(self._approval_buf)
+        m = self._APPROVAL_RE.search(clean)
+        if not m:
+            return
+        message = m.group(1).strip()
+        self._approval_active = True
+        self._approval_at = time.monotonic()
+        self._approval_buf = ""
+        self._dispatch({"t": "approval", "message": message, "timeout": 30})
+
+    def answer_approval(self, allow: bool) -> None:
+        """Answer the pending web-tool approval prompt (writes a y/n line)."""
+        if not self._approval_active:
+            return
+        self._write("y\n" if allow else "n\n")
+        self._approval_active = False
+        self._approval_buf = ""
+        self._dispatch({"t": "approval_clear"})
 
     def _handle_pty_event(self, ev) -> None:
         if ev.kind == "status":

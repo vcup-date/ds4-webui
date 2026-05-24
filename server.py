@@ -248,6 +248,8 @@ async def ws(websocket: WebSocket):
                     agent.cmd(data.get("text", ""))
                 elif t == "interrupt":
                     agent.interrupt()
+                elif t == "approval_answer":
+                    agent.answer_approval(bool(data.get("allow")))
                 elif t == "refresh_sessions":
                     sessions = await agent.request_sessions()
                     # request_sessions emits {"t": "sessions", ...} via /list,
