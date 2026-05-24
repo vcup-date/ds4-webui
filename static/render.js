@@ -190,8 +190,22 @@
     // a fresh bubble so text and tools interleave in source order.
     let last = lastChild(turn);
     let bubble;
-    if (last && last.classList && last.classList.contains("bubble") && last.classList.contains("markdown")) {
+    const isBubble = (e) => e && e.classList &&
+      e.classList.contains("bubble") && e.classList.contains("markdown");
+    if (isBubble(last)) {
       bubble = last;
+    } else if (/^[\s.?!,;:'")\]}]*$/.test(text)) {
+      // Orphan trailing punctuation arriving after a tool card / web note:
+      // rejoin it to the previous content bubble instead of dropping it on a
+      // line of its own. This is what makes a lone "?" or "." after a tool
+      // call read as the end of the sentence above it.
+      const bubbles = turn.querySelectorAll(":scope > .bubble.markdown");
+      bubble = bubbles.length ? bubbles[bubbles.length - 1] : null;
+      if (!bubble) {
+        bubble = el("div", { class: "bubble markdown" });
+        bubble.dataset.contentBuf = "";
+        turn.appendChild(bubble);
+      }
     } else {
       bubble = el("div", { class: "bubble markdown" });
       bubble.dataset.contentBuf = "";
