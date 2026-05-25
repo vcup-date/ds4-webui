@@ -534,7 +534,11 @@
       // A new turn re-saves the session under a new SHA at the top of the
       // list, so let the newest entry become the highlighted/active one.
       state.activeSha = null;
-      // Render the user bubble immediately.
+      // Render the user bubble immediately, then force the next assistant
+      // response into a FRESH turn below it. Without this, a stale
+      // currentAssistantTurn (e.g. after a Stop whose turn_end has not landed
+      // yet) would catch the new response and render it ABOVE this bubble.
+      state.currentAssistantTurn = null;
       $("#messages").appendChild(DS4Render.newUserTurn(text));
       scrollMessagesToBottom();
     }
