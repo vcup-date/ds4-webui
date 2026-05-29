@@ -489,6 +489,14 @@
       return;
     }
 
+    // Autosave confirmation ("saved session <sha> (N tokens)") is automatic
+    // noise — the sidebar refresh already reflects it. Never show it in chat.
+    // (The plural "saved sessions in ..." from /list is handled elsewhere.)
+    if (/^saved session\b/i.test(text) && !/^saved sessions\b/i.test(text)) {
+      state.pendingCmds.shift();
+      return;
+    }
+
     // Default: render as a compact slash bubble (e.g. /save, /help output).
     const label = state.pendingCmds.shift() || "/cmd";
     const turn = DS4Render.el("div", { class: "turn turn-slash" },
