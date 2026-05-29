@@ -56,8 +56,12 @@ def strip_ansi(text: str) -> str:
 # mid-rewrite can expose garbled values like "30.." or "2..9"; those simply
 # fail to match and the frame is skipped — the next clean redraw updates it.
 _NUM = r"\d+(?:\.\d+)?"
+# The prefill label is no longer the literal word "prefill": newer ds4-agent
+# rotates it through reading/absorbing/studying/gathering/crunching/
+# scrutinizing. The reliable signature of a prefill line is the "[bar] N/M P%"
+# shape, so match any single label word followed by the bracketed bar.
 _STATUS_PREFILL = re.compile(
-    r"ctx\s+(\S+)/(\S+)\s+\|\s+prefill\s+\[.*?\]\s+(\d+)/(\d+)\s+(" + _NUM + r")%"
+    r"ctx\s+(\S+)/(\S+)\s+\|\s+\S+\s+\[.*?\]\s+(\d+)/(\d+)\s+(" + _NUM + r")%"
 )
 _STATUS_GEN = re.compile(
     r"ctx\s+(\S+)/(\S+)\s+\|\s+generation\s+(\d+)\s+tokens\s+(" + _NUM + r")\s+t/s"
@@ -69,6 +73,9 @@ _STATUS_SAVING = re.compile(r"ctx\s+(\S+)/(\S+)\s+\|\s+saving session")
 _STATUS_ERROR = re.compile(r"ctx\s+(\S+)/(\S+)\s+\|\s+error:\s+(.*)")
 _STATUS_INT = re.compile(r"ctx\s+(\S+)/(\S+)\s+\|\s+interrupted")
 _STATUS_IDLE = re.compile(r"ctx\s+(\S+)/(\S+)\s+\|\s+idle")
+# Distributed-cluster shutdown state (newer ds4-agent). Local single-machine
+# use never hits it, but recognize it so it doesn't fall through to "unknown".
+_STATUS_DRAIN = re.compile(r"ctx\s+(\S+)/(\S+)\s+\|\s+stopping after")
 
 
 @dataclass
@@ -166,6 +173,14 @@ def parse_status(line: str) -> Optional[StatusEvent]:
     if m:
         return StatusEvent(
             state="idle",
+            ctx_used=_parse_size(m.group(1)),
+            ctx_size=_parse_size(m.group(2)),
+        )
+
+    m = _STATUS_DRAIN.match(line)
+    if m:
+        return StatusEvent(
+            state="stopping",
             ctx_used=_parse_size(m.group(1)),
             ctx_size=_parse_size(m.group(2)),
         )

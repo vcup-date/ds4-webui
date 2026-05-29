@@ -38,6 +38,22 @@ class TestStatusParse(unittest.TestCase):
         self.assertEqual(s.prefill_total, 45)
         self.assertAlmostEqual(s.prefill_pct, 62.2)
 
+    def test_prefill_rotating_labels(self):
+        # Newer ds4-agent rotates the prefill word through these labels; all of
+        # them must still be recognized as prefill (matched by the bar shape).
+        for lab in ("reading", "absorbing", "studying", "gathering",
+                    "crunching", "scrutinizing"):
+            s = parse_status(f"ctx 1.3k/200k | {lab} [▶▶···] 5/10 50.0%")
+            self.assertIsNotNone(s, lab)
+            self.assertEqual(s.state, "prefill", lab)
+            self.assertEqual(s.prefill_done, 5)
+            self.assertEqual(s.prefill_total, 10)
+
+    def test_draining_state(self):
+        s = parse_status("ctx 1.3k/200k | stopping after distributed cluster drains")
+        self.assertIsNotNone(s)
+        self.assertEqual(s.state, "stopping")
+
     def test_compacting(self):
         s = parse_status("ctx 50k/200k | COMPACTING summary 12 tokens 8.0 t/s")
         self.assertEqual(s.state, "compacting")
