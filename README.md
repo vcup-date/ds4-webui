@@ -172,7 +172,7 @@ curl http://127.0.0.1:8810/api/sessions
 
 ## Troubleshooting
 
-- `ds4-agent` moved on and the wrapper broke. `ds4-agent` is experimental and changes often; an update can shift the output format the wrapper parses (status labels, session output, DSML). If something stops working after an upstream change, just ask Claude Code or Codex to fetch the latest ds4, rebuild it, see what changed, and fix the wrapper to match. That is how this project has been kept in sync.
+- Something behaves differently after a `ds4-agent` update. `ds4-agent` evolves quickly, and an update can adjust the output format the wrapper reads (status labels, session output, DSML). If the wrapper falls out of step, just ask Claude Code or Codex to fetch the latest ds4, rebuild it, look at what changed, and update the wrapper to match. That is how this project stays in sync.
 - The agent shows as `stopped` right at boot. The `agent_path` in `settings.json` is not executable, or `model` does not point at a real file. Fix it in the settings drawer and Apply.
 - The first prompt is slow. The model file has to load onto Metal first. The system log reports the progress.
 - `failed to start line editor`. That is `ds4-agent` saying it did not get a tty. It should not happen through this wrapper. If it does, that is a bug.
