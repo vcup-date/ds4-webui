@@ -80,6 +80,43 @@
     })[c]);
   }
 
+  // Re-rendering the full markdown + re-highlighting on every streamed token
+  // is O(n^2) and visibly flickers ("flushing") once a thinking/answer block
+  // gets long. Coalesce renders to a modest rate, and back off further as the
+  // buffer grows so a very long stream doesn't re-parse a huge string dozens
+  // of times a second. `getText` is read lazily so the trailing render always
+  // shows the latest buffer. Call flushRender() to force the final state.
+  function renderIntervalFor(len) {
+    if (len > 40000) return 500;
+    if (len > 16000) return 300;
+    if (len > 4000) return 160;
+    return 90;
+  }
+
+  function doRender(elm, getText) {
+    if (elm._renderTimer) { clearTimeout(elm._renderTimer); elm._renderTimer = null; }
+    elm._lastRenderAt = Date.now();
+    elm.innerHTML = renderMarkdown(getText());
+    applyCodeHighlight(elm);
+    attachCopyButtons(elm);
+  }
+
+  function scheduleRender(elm, getText) {
+    const now = Date.now();
+    const interval = renderIntervalFor((getText() || "").length);
+    const since = now - (elm._lastRenderAt || 0);
+    if (since >= interval) {
+      doRender(elm, getText);
+    } else if (!elm._renderTimer) {
+      elm._renderTimer = setTimeout(() => doRender(elm, getText), interval - since);
+    }
+  }
+
+  function flushRender(elm, getText) {
+    if (!elm) return;
+    doRender(elm, getText);
+  }
+
   function applyCodeHighlight(rootEl) {
     if (!global.hljs) return;
     rootEl.querySelectorAll("pre code").forEach((codeEl) => {
@@ -170,9 +207,7 @@
     // pipeline as the answer, so code fences become real code blocks and
     // DeepSeek's newline-before-punctuation doesn't break onto its own line.
     tb.dataset.thinkBuf = (tb.dataset.thinkBuf || "") + text;
-    body.innerHTML = renderMarkdown(tb.dataset.thinkBuf);
-    applyCodeHighlight(body);
-    attachCopyButtons(body);
+    scheduleRender(body, () => tb.dataset.thinkBuf || "");
     const n = parseInt(tb.dataset.tokens || "0", 10) + 1;
     tb.dataset.tokens = String(n);
     const head = tb.querySelector(".thinking-head span:last-child");
@@ -212,14 +247,15 @@
       turn.appendChild(bubble);
     }
     bubble.dataset.contentBuf = (bubble.dataset.contentBuf || "") + text;
-    bubble.innerHTML = renderMarkdown(bubble.dataset.contentBuf);
-    applyCodeHighlight(bubble);
-    attachCopyButtons(bubble);
+    scheduleRender(bubble, () => bubble.dataset.contentBuf || "");
   }
 
   function finalizeThinking(tb) {
     if (!tb) return;
     if (tb.dataset.finalized === "1") return;
+    // Flush any throttled-out render so the collapsed block holds the full text.
+    const body = tb.querySelector(".thinking-body");
+    if (body) flushRender(body, () => tb.dataset.thinkBuf || "");
     tb.dataset.finalized = "1";
     tb.dataset.open = "false";
     const dur = ((Date.now() - parseInt(tb.dataset.startedAt || "0", 10)) / 1000).toFixed(1);
@@ -231,6 +267,11 @@
   function finalizeTurn(turn) {
     const tb = turn.querySelector(":scope > .thinking-block[data-finalized='0']");
     if (tb) finalizeThinking(tb);
+    // Flush the trailing content bubble's pending render so the finished answer
+    // shows in full even if its last render was throttled out.
+    const bubbles = turn.querySelectorAll(":scope > .bubble.markdown");
+    const last = bubbles[bubbles.length - 1];
+    if (last) flushRender(last, () => last.dataset.contentBuf || "");
   }
 
   // -- Tool card -----------------------------------------------------------
