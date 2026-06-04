@@ -219,9 +219,14 @@
   }
 
   function onTurnEnd() {
+    // Finalize (collapse the thinking block) but DO NOT drop the turn. The
+    // pty status thread fires turn_end the instant the agent goes idle, which
+    // can beat the trace thread's final token(s) (e.g. a trailing "?" or ".").
+    // Keeping the turn means those late tokens append to the same bubble
+    // instead of opening a new one on their own line. The turn is replaced
+    // when the user sends the next prompt (sendInput) or a session is loaded.
     if (state.currentAssistantTurn) {
       DS4Render.finalizeTurn(state.currentAssistantTurn);
-      state.currentAssistantTurn = null;
     }
   }
 
