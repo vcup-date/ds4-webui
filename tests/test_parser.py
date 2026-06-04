@@ -411,6 +411,30 @@ class TestTranscript(unittest.TestCase):
         self.assertIn("417.85", turns[2].content)
         self.assertEqual(turns[2].tools, [])
 
+    def test_wrapped_tool_result_hidden(self):
+        # Newer ds4-agent wraps tool results as <tool_result>...</tool_result>
+        # inside a pseudo-user turn (replacing the old "Tool: " prefix). These
+        # must still be skipped in history replay.
+        text = (
+            "<｜begin▁of▁sentence｜>SYSTEM"
+            "<｜User｜>find tesla price"
+            "<｜Assistant｜><think>fetch</think>"
+            "<｜DSML｜tool_calls><｜DSML｜invoke name=\"google_search\">"
+            "<｜DSML｜parameter name=\"query\" string=\"true\">tesla</｜DSML｜parameter>"
+            "</｜DSML｜invoke></｜DSML｜tool_calls>"
+            "<｜end▁of▁sentence｜>"
+            "<｜User｜><tool_result># results TSLA $250</tool_result>"
+            "<｜Assistant｜>It is **$250**.<｜end▁of▁sentence｜>"
+        )
+        turns = parse_transcript(text)
+        self.assertEqual(len(turns), 3)  # tool_result user turn skipped
+        users = [t for t in turns if t.role == "user"]
+        self.assertEqual(len(users), 1)
+        self.assertEqual(users[0].content, "find tesla price")
+        self.assertNotIn("tool_result", users[0].content)
+        self.assertEqual(turns[1].tools[0]["name"], "google_search")
+        self.assertIn("250", turns[2].content)
+
     def test_no_user_marker(self):
         self.assertEqual(parse_transcript("just system prompt, no turns"), [])
 

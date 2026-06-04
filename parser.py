@@ -522,7 +522,12 @@ def parse_transcript(text: str) -> List[Turn]:
 
 def _is_tool_result(user_text: str) -> bool:
     t = user_text.lstrip()
-    return t.startswith("Tool:") or t.startswith("Tool result") \
+    # Newer ds4-agent wraps tool results as "<｜User｜><tool_result>...
+    # </tool_result>". Older builds prefixed the user turn with "Tool: ".
+    # Recognize both so tool-result pseudo-turns are skipped in history replay
+    # (the assistant's tool cards already represent the tool activity).
+    return t.startswith("<tool_result>") \
+        or t.startswith("Tool:") or t.startswith("Tool result") \
         or t.startswith("<｜tool")
 
 
