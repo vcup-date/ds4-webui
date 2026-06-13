@@ -31,6 +31,20 @@ class TestStatusParse(unittest.TestCase):
         self.assertEqual(s.ctx_used, 1400)
         self.assertEqual(s.ctx_size, 100000)
 
+    def test_generation_greedy_and_power(self):
+        # Newer ds4-agent adds a greedy marker (❄️) between "tokens" and the
+        # number, and a trailing power suffix (" | ⚡ N%").
+        for line in (
+            "ctx 1.4k/100k | generation 49 tokens ❄️ 37.2 t/s",
+            "ctx 1.4k/100k | generation 49 tokens 37.2 t/s | ⚡ 50%",
+            "ctx 1.4k/100k | generation 49 tokens ❄️ 37.2 t/s | ⚡ 50%",
+        ):
+            s = parse_status(line)
+            self.assertIsNotNone(s, line)
+            self.assertEqual(s.state, "generation", line)
+            self.assertEqual(s.generated, 49, line)
+            self.assertAlmostEqual(s.tps, 37.2, msg=line)
+
     def test_prefill(self):
         s = parse_status("ctx 1.3k/100k | prefill [▶▶▶▶▶▶▶▶▶▶▶···········] 28/45 62.2%")
         self.assertEqual(s.state, "prefill")

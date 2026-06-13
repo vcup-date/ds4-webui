@@ -63,8 +63,12 @@ _NUM = r"\d+(?:\.\d+)?"
 _STATUS_PREFILL = re.compile(
     r"ctx\s+(\S+)/(\S+)\s+\|\s+\S+\s+\[.*?\]\s+(\d+)/(\d+)\s+(" + _NUM + r")%"
 )
+# Newer ds4-agent inserts a marker between "tokens" and the t/s number for
+# greedy sampling (" ❄️"). Allow an optional non-numeric marker there so the
+# generation line still parses. A trailing power suffix (" | ⚡ N%") is ignored
+# because we match, not full-match.
 _STATUS_GEN = re.compile(
-    r"ctx\s+(\S+)/(\S+)\s+\|\s+generation\s+(\d+)\s+tokens\s+(" + _NUM + r")\s+t/s"
+    r"ctx\s+(\S+)/(\S+)\s+\|\s+generation\s+(\d+)\s+tokens\s+(?:[^\d\s]+\s+)?(" + _NUM + r")\s+t/s"
 )
 _STATUS_COMPACT = re.compile(
     r"ctx\s+(\S+)/(\S+)\s+\|\s+COMPACTING\s+summary\s+(\d+)\s+tokens\s+(" + _NUM + r")\s+t/s"
