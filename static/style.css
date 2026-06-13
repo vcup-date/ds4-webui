@@ -141,6 +141,9 @@ body { display: flex; flex-direction: column; }
 .primary-btn[data-mode="stop"] {
     background: var(--err); color: white;
 }
+.primary-btn[data-mode="queue"] {
+    background: var(--tool); color: #06101f;
+}
 .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .ghost-btn {
@@ -317,6 +320,22 @@ body { display: flex; flex-direction: column; }
     color: var(--text);
     white-space: pre-wrap;
     word-wrap: break-word;
+}
+/* A message injected while the agent is still replying: dimmed with a dashed
+   border and a "queued" tag until its turn starts. */
+.turn-user.queued .bubble {
+    border-style: dashed;
+    border-color: var(--tool);
+    opacity: 0.8;
+}
+.turn-user.queued .bubble::after {
+    content: "queued";
+    display: block;
+    margin-top: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--tool);
 }
 .turn-assistant .bubble {
     max-width: 100%;

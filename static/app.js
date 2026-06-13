@@ -22,6 +22,7 @@
     restored: false,           // have we restored history on this page load yet
     restorePending: false,     // history fetch in flight; buffer live events
     restoreQueue: [],          // live events deferred until restore finishes
+    queuedBubbles: [],         // FIFO of injected user bubbles awaiting their turn
   };
 
   // Live-stream events that must be deferred while history is being restored,
@@ -118,7 +119,7 @@
       case "agent_state":  onAgentState(m); break;
       case "status":       onStatus(m); break;
       case "token":        onToken(m); break;
-      case "turn_start":   /* purely informational */ break;
+      case "turn_start":   onTurnStart(m); break;
       case "turn_end":     onTurnEnd(m); break;
       case "tool":         onTool(m); break;
       case "tool_start":       onToolStart(m); break;
@@ -191,7 +192,7 @@
       speedBlock.hidden = true;
     }
     state.inGeneration = busy;
-    ensureSendIsStop(busy);
+    refreshSendButton();
 
     if (m.state === "error") {
       toast(m.error || "agent error", "err", 6000);
@@ -216,6 +217,18 @@
       DS4Render.appendContent(turn, m.text);
     }
     throttledScroll();
+  }
+
+  function onTurnStart() {
+    // A genuinely new turn is starting (the agent dispatches turn_start only
+    // for a new turn, not between tool rounds). Reset the assistant-turn
+    // reference so this turn's tokens render in a fresh turn below — this is
+    // what lets an injected/queued prompt appear as its own turn. The previous
+    // turn's late trailing token (if any) already landed before this fired.
+    state.currentAssistantTurn = null;
+    // The oldest queued message is the one now running; drop its badge.
+    const b = state.queuedBubbles.shift();
+    if (b) b.classList.remove("queued");
   }
 
   function onTurnEnd() {
@@ -514,49 +527,78 @@
 
   // ---------- input ----------
 
-  function ensureSendIsStop(stop) {
+  // The send button has three states:
+  //   idle            -> "Send"   (send the prompt)
+  //   busy + empty    -> "Stop"   (interrupt the current reply)
+  //   busy + has text -> "Queue"  (inject; runs after the current reply)
+  // Esc always interrupts, so Stop is reachable even while text is typed.
+  function refreshSendButton() {
     const btn = $("#btn-send");
-    if (stop) {
+    const hasText = !!$("#composer-input").value.trim();
+    if (state.inGeneration && !hasText) {
       btn.textContent = "Stop";
       btn.dataset.mode = "stop";
+      btn.title = "Stop the current reply (Esc)";
+    } else if (state.inGeneration && hasText) {
+      btn.textContent = "Queue";
+      btn.dataset.mode = "queue";
+      btn.title = "Queue this message to run after the current reply (Enter). Esc stops.";
     } else {
       btn.textContent = "Send";
       delete btn.dataset.mode;
+      btn.title = "Send";
     }
   }
 
   function sendInput() {
-    // While generating, the button is Stop and must work regardless of the
-    // input box (which is empty after a prompt is sent, or after a refresh).
-    // This check has to come before the empty-text guard below.
-    if (state.inGeneration) {
-      send({ t: "interrupt" });
-      return;
-    }
     const input = $("#composer-input");
     const text = input.value;
-    if (!text.trim()) return;
-    const isSlash = /^\s*\//.test(text);
-    if (isSlash) {
-      // Normalize: collapse leading slashes ("//switch" → "/switch"), trim.
-      const cmd = text.trim().replace(/^\/+/, "/");
-      state.pendingCmds.push(cmd);
-      send({ t: "cmd", text: cmd });
+    const hasText = !!text.trim();
+
+    if (state.inGeneration) {
+      if (hasText) {
+        // Inject: queue the message; the agent runs it after the current
+        // reply (its prompt queue stays live while it generates).
+        submitInput(text, /*queued=*/ true);
+      } else {
+        // Empty input -> the button is Stop.
+        send({ t: "interrupt" });
+      }
     } else {
-      send({ t: "prompt", text: text });
-      // A new turn re-saves the session under a new SHA at the top of the
-      // list, so let the newest entry become the highlighted/active one.
-      state.activeSha = null;
-      // Render the user bubble immediately, then force the next assistant
-      // response into a FRESH turn below it. Without this, a stale
-      // currentAssistantTurn (e.g. after a Stop whose turn_end has not landed
-      // yet) would catch the new response and render it ABOVE this bubble.
-      state.currentAssistantTurn = null;
-      $("#messages").appendChild(DS4Render.newUserTurn(text));
-      scrollMessagesToBottom();
+      if (!hasText) return;
+      submitInput(text, /*queued=*/ false);
     }
     input.value = "";
     autosize();
+    refreshSendButton();
+  }
+
+  // Send a prompt or /command and render its user bubble. `queued` means it was
+  // injected mid-generation: it shows a "queued" badge and must NOT reset the
+  // currently-streaming assistant turn (that turn is still being written).
+  function submitInput(text, queued) {
+    const isSlash = /^\s*\//.test(text);
+    if (isSlash) {
+      const cmd = text.trim().replace(/^\/+/, "/");
+      state.pendingCmds.push(cmd);
+      send({ t: "cmd", text: cmd });
+      return;
+    }
+    send({ t: "prompt", text: text });
+    // A new turn re-saves the session under a new SHA at the top, so let the
+    // newest entry become the active one.
+    state.activeSha = null;
+    const bubble = DS4Render.newUserTurn(text);
+    if (queued) {
+      bubble.classList.add("queued");
+      state.queuedBubbles.push(bubble);
+    } else {
+      // Fresh send while idle: start the next assistant reply in a new turn.
+      // (Injected sends rely on turn_start to separate turns instead.)
+      state.currentAssistantTurn = null;
+    }
+    $("#messages").appendChild(bubble);
+    scrollMessagesToBottom();
   }
 
   function autosize() {
@@ -736,9 +778,17 @@
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendInput();
+      } else if (e.key === "Escape" && state.inGeneration) {
+        // Esc always interrupts, even with text typed (so Stop is reachable
+        // when the button is showing "Queue").
+        e.preventDefault();
+        send({ t: "interrupt" });
       }
     });
-    $("#composer-input").addEventListener("input", autosize);
+    $("#composer-input").addEventListener("input", () => {
+      autosize();
+      refreshSendButton();
+    });
     $("#btn-settings").addEventListener("click", openSettings);
     $("#btn-settings-close").addEventListener("click", closeSettings);
     $("#btn-settings-discard").addEventListener("click", closeSettings);
