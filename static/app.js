@@ -131,6 +131,7 @@
       case "approval":     onApproval(m); break;
       case "approval_clear": hideApproval(); break;
       case "web_activity": onWebActivity(m); break;
+      case "queue_consumed": onQueueConsumed(); break;
       case "tool_inline":  /* terminal-only render, ignore */ break;
       case "system":       onSystem(m); break;
       case "sessions":     onSessions(m); break;
@@ -219,16 +220,32 @@
     throttledScroll();
   }
 
+  function onQueueConsumed() {
+    // The agent is now folding the queued message(s) into the current reply.
+    // Move them up so they sit ABOVE the response that addresses them (reads
+    // "user said A, then B, assistant answered"), and drop the queued badge.
+    const turn = state.currentAssistantTurn;
+    for (const b of state.queuedBubbles) {
+      b.classList.remove("queued");
+      if (turn && turn.parentNode) {
+        turn.parentNode.insertBefore(b, turn);
+      }
+    }
+    state.queuedBubbles = [];
+    scrollMessagesToBottom();
+  }
+
   function onTurnStart() {
-    // A genuinely new turn is starting (the agent dispatches turn_start only
-    // for a new turn, not between tool rounds). Reset the assistant-turn
-    // reference so this turn's tokens render in a fresh turn below — this is
-    // what lets an injected/queued prompt appear as its own turn. The previous
-    // turn's late trailing token (if any) already landed before this fired.
+    // A genuinely new turn is starting (fires once per turn). Reset the
+    // assistant-turn reference so this turn's tokens render in a fresh turn
+    // below — this is what lets an injected/queued prompt appear as its own
+    // turn. The previous turn's late trailing token already landed before this.
     state.currentAssistantTurn = null;
-    // The oldest queued message is the one now running; drop its badge.
-    const b = state.queuedBubbles.shift();
-    if (b) b.classList.remove("queued");
+    // Every queued message is now being processed: the agent drains its whole
+    // prompt queue into this single turn (delivered as one merged message), so
+    // clear ALL queued badges, not just one.
+    for (const b of state.queuedBubbles) b.classList.remove("queued");
+    state.queuedBubbles = [];
   }
 
   function onTurnEnd() {

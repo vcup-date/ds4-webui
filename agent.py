@@ -288,6 +288,9 @@ class AgentProcess:
         # Generation-end heuristic: when status goes from generation -> idle
         # we emit a `turn_end` event so the frontend can finalize the bubble.
         self._was_generating = False
+        # True between a turn's first prefill and its end; gates turn_start /
+        # turn_end to once per turn (the status footer redraws many times).
+        self._turn_active = False
 
         # Pending requests (response futures keyed by request type).
         self._pending_sessions: Optional[asyncio.Future] = None
@@ -384,6 +387,7 @@ class AgentProcess:
         self._in_slash = False
         self._thinking = p.ThinkingState()
         self._was_generating = False
+        self._turn_active = False
         # Reset web-tool approval detection for the fresh process.
         self._approval_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self._approval_buf = ""
@@ -689,17 +693,23 @@ class AgentProcess:
         # so the model's first emitted token is inside the thinking section
         # (closed by `</think>` before the visible answer). With thinking
         # disabled the model emits content directly.
-        if st.state == "prefill" and not self._was_generating:
+        # turn_start / turn_end must fire EXACTLY ONCE per turn. The prefill
+        # status redraws many times as the progress bar fills (and idle redraws
+        # too), so gate on a per-turn flag rather than the raw status, or the
+        # frontend would see dozens of turn_start events and scramble ordering.
+        if st.state == "prefill" and not self._was_generating and not self._turn_active:
             thinks = self._current_settings.think_mode != "off" \
                 if self._current_settings else True
             self._thinking.reset(start_in_think=thinks)
             self._dsml.reset()
             self._tok_decoder.reset()
+            self._turn_active = True
             self._dispatch({"t": "turn_start"})
         if st.state == "generation":
             self._was_generating = True
-        elif st.state in ("idle", "interrupted", "error") and self._was_generating:
+        elif st.state in ("idle", "interrupted", "error") and self._turn_active:
             self._was_generating = False
+            self._turn_active = False
             for seg in self._thinking.flush():
                 if seg.text:
                     self._dispatch({"t": "token", "kind": seg.kind, "text": seg.text})
@@ -795,6 +805,15 @@ class AgentProcess:
                 pass
 
     def _handle_trace_line(self, line: str) -> None:
+        # When the agent folds injected prompts into the ONGOING turn it logs
+        # a "queued_user=..." line (parse_trace_line ignores it). Tell the UI so
+        # it can un-queue those bubbles and move them above the response now
+        # addressing them. The other delivery path logs a normal "user=" line
+        # and starts a fresh turn, which the following turn_start handles — so
+        # match queued_user specifically, not that.
+        if "queued_user=" in line:
+            self._dispatch({"t": "queue_consumed"})
+            return
         ev = p.parse_trace_line(line)
         if ev is None:
             return
