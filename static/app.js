@@ -682,6 +682,10 @@
     check("quality", s.quality);
     check("warm_weights", s.warm_weights);
     set("power", s.power || 100);
+    check("ssd_streaming", s.ssd_streaming);
+    set("ssd_cache_experts", s.ssd_cache_experts || "");
+    set("ssd_preload_experts", s.ssd_preload_experts || 0);
+    check("ssd_cold", s.ssd_cold);
     set("ui_theme", s.ui_theme || "dark");
     check("autosave", s.autosave !== false);
     syncSettingsReadouts();
@@ -713,6 +717,10 @@
       quality: f.querySelector('[name="quality"]').checked,
       warm_weights: f.querySelector('[name="warm_weights"]').checked,
       power: int("power", 100),
+      ssd_streaming: f.querySelector('[name="ssd_streaming"]').checked,
+      ssd_cache_experts: (fd.get("ssd_cache_experts") || "").trim(),
+      ssd_preload_experts: int("ssd_preload_experts", 0),
+      ssd_cold: f.querySelector('[name="ssd_cold"]').checked,
       ui_theme: fd.get("ui_theme") || "dark",
       autosave: f.querySelector('[name="autosave"]').checked,
     };

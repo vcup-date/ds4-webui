@@ -210,6 +210,29 @@
             </fieldset>
         </details>
 
+        <details class="adv">
+            <summary>SSD streaming <span class="restart-tag">restart</span></summary>
+            <fieldset>
+                <label class="row">
+                    <input type="checkbox" name="ssd_streaming" /> <span>stream experts from SSD <span class="hint">— run models larger than RAM</span></span>
+                </label>
+                <p class="hint">Off = keep the whole model resident (faster, but the model must fit in RAM). On = stream routed experts from disk, trading speed for the ability to run bigger models.</p>
+                <label class="row">
+                    <span>expert cache <span class="hint">(blank = auto)</span></span>
+                    <input type="text" name="ssd_cache_experts" placeholder="e.g. 32GB or 4000" />
+                </label>
+                <p class="hint">Expert count (<code>4000</code>) or a GiB budget (<code>32GB</code>). Auto sizes it from the GPU working set — prefer auto unless you are measuring.</p>
+                <label class="row">
+                    <span>preload experts <span class="hint">(0 = auto)</span></span>
+                    <input type="number" name="ssd_preload_experts" min="0" max="1000000" />
+                </label>
+                <label class="row">
+                    <input type="checkbox" name="ssd_cold" /> <span>cold cache <span class="hint">— skip preload (measurement only)</span></span>
+                </label>
+                <p class="hint">Cold overrides preload. Leave both alone for normal use.</p>
+            </fieldset>
+        </details>
+
         <fieldset>
             <legend>Interface <span class="instant-tag">instant</span></legend>
             <label class="row">theme

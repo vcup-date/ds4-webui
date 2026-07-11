@@ -7,6 +7,7 @@ restarted when any restart-required key changes.
 from __future__ import annotations
 import json
 import os
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Set
@@ -42,6 +43,10 @@ RESTART_KEYS: Set[str] = {
     "quality",
     "warm_weights",
     "power",
+    "ssd_streaming",
+    "ssd_cache_experts",
+    "ssd_preload_experts",
+    "ssd_cold",
 }
 
 
@@ -78,6 +83,22 @@ class Settings:
     # Target GPU duty cycle percentage (--power, 1..100). 100 = full speed;
     # lower throttles the GPU for cooler/quieter runs. 100 = agent default.
     power: int = 100
+
+    # SSD streaming (--ssd-streaming): stream routed experts from disk instead
+    # of keeping the whole model resident. This turns "does the model fit in
+    # RAM?" from a hard cutoff into a speed tradeoff, so models larger than RAM
+    # become runnable. Off by default: full residency is faster when it fits.
+    ssd_streaming: bool = False
+    # Routed-expert cache as an expert count ("4000") or a GiB budget ("32GB").
+    # Empty = let the agent auto-size it (80% of the Metal working set minus
+    # non-routed weights). Prefer auto; only pin this for measurements.
+    ssd_cache_experts: str = ""
+    # Upfront popularity-based preload count. 0 = agent auto (hot seed, capped
+    # at 4096). Ignored when ssd_cold is set.
+    ssd_preload_experts: int = 0
+    # Skip the popularity preload entirely (--ssd-streaming-cold). Measurement
+    # aid: gives a cold-cache baseline. Leave off for normal use.
+    ssd_cold: bool = False
 
     ui_theme: str = "dark"
 
@@ -118,6 +139,13 @@ class Settings:
             raise ValueError("threads must be in [0, 256]")
         if self.power < 1 or self.power > 100:
             raise ValueError("power must be in [1, 100]")
+        # ssd_cache_experts is either an expert count ("4000") or a GiB budget
+        # ("32GB"); empty means auto-size. Anything else the agent would reject.
+        if self.ssd_cache_experts:
+            if not re.fullmatch(r"\d+(GB)?", self.ssd_cache_experts.strip(), re.I):
+                raise ValueError("ssd_cache_experts must be N or NGB (e.g. 4000 or 32GB)")
+        if self.ssd_preload_experts < 0 or self.ssd_preload_experts > 1_000_000:
+            raise ValueError("ssd_preload_experts must be in [0, 1000000]")
         if self.ui_theme not in ("dark", "light"):
             raise ValueError("ui_theme must be dark|light")
 
@@ -163,6 +191,18 @@ class Settings:
             args.append("--warm-weights")
         if self.power and self.power != 100:
             args += ["--power", str(self.power)]
+
+        # SSD streaming. The sub-flags are only meaningful once streaming is on,
+        # so keep them gated: passing them standalone would be a no-op at best.
+        if self.ssd_streaming:
+            args.append("--ssd-streaming")
+            if self.ssd_cache_experts:
+                args += ["--ssd-streaming-cache-experts", self.ssd_cache_experts.strip()]
+            if self.ssd_cold:
+                # Cold skips the preload, so a preload count would contradict it.
+                args.append("--ssd-streaming-cold")
+            elif self.ssd_preload_experts:
+                args += ["--ssd-streaming-preload-experts", str(self.ssd_preload_experts)]
         return args
 
 
