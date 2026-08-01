@@ -230,6 +230,11 @@
                     <input type="checkbox" name="ssd_cold" /> <span>cold cache <span class="hint">— skip preload (measurement only)</span></span>
                 </label>
                 <p class="hint">Cold overrides preload. Leave both alone for normal use.</p>
+                <label class="row">
+                    <span>full-resident layers <span class="hint">(-1 = auto)</span></span>
+                    <input type="number" name="ssd_full_layers" min="-1" max="1024" />
+                </label>
+                <p class="hint">GLM Metal streaming: keep the first N routed layers fully in RAM. <code>-1</code> = auto, <code>0</code> = disable.</p>
             </fieldset>
         </details>
 

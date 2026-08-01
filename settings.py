@@ -47,6 +47,7 @@ RESTART_KEYS: Set[str] = {
     "ssd_cache_experts",
     "ssd_preload_experts",
     "ssd_cold",
+    "ssd_full_layers",
 }
 
 
@@ -99,6 +100,10 @@ class Settings:
     # Skip the popularity preload entirely (--ssd-streaming-cold). Measurement
     # aid: gives a cold-cache baseline. Leave off for normal use.
     ssd_cold: bool = False
+    # GLM Metal streaming: keep the first N routed layers fully resident.
+    # -1 = auto (size from the expert budget, the agent default), 0 = disable,
+    # N = pin N layers. Only meaningful with SSD streaming on.
+    ssd_full_layers: int = -1
 
     ui_theme: str = "dark"
 
@@ -146,6 +151,9 @@ class Settings:
                 raise ValueError("ssd_cache_experts must be N or NGB (e.g. 4000 or 32GB)")
         if self.ssd_preload_experts < 0 or self.ssd_preload_experts > 1_000_000:
             raise ValueError("ssd_preload_experts must be in [0, 1000000]")
+        # -1 = auto, 0 = disable, N = pin N routed layers resident.
+        if self.ssd_full_layers < -1 or self.ssd_full_layers > 1024:
+            raise ValueError("ssd_full_layers must be in [-1, 1024]")
         if self.ui_theme not in ("dark", "light"):
             raise ValueError("ui_theme must be dark|light")
 
@@ -203,6 +211,9 @@ class Settings:
                 args.append("--ssd-streaming-cold")
             elif self.ssd_preload_experts:
                 args += ["--ssd-streaming-preload-experts", str(self.ssd_preload_experts)]
+            # -1 = leave the agent's auto sizing alone; 0/N are explicit.
+            if self.ssd_full_layers >= 0:
+                args += ["--ssd-streaming-full-layers", str(self.ssd_full_layers)]
         return args
 
 

@@ -686,6 +686,7 @@
     set("ssd_cache_experts", s.ssd_cache_experts || "");
     set("ssd_preload_experts", s.ssd_preload_experts || 0);
     check("ssd_cold", s.ssd_cold);
+    set("ssd_full_layers", s.ssd_full_layers ?? -1);
     set("ui_theme", s.ui_theme || "dark");
     check("autosave", s.autosave !== false);
     syncSettingsReadouts();
@@ -721,6 +722,7 @@
       ssd_cache_experts: (fd.get("ssd_cache_experts") || "").trim(),
       ssd_preload_experts: int("ssd_preload_experts", 0),
       ssd_cold: f.querySelector('[name="ssd_cold"]').checked,
+      ssd_full_layers: int("ssd_full_layers", -1),
       ui_theme: fd.get("ui_theme") || "dark",
       autosave: f.querySelector('[name="autosave"]').checked,
     };
