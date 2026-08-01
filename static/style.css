@@ -232,9 +232,8 @@ body { display: flex; flex-direction: column; }
 }
 .session-row:hover { background: var(--bg-elev2); border-color: var(--line); }
 .session-row.active {
-    background: var(--bg-elev2);
-    border-color: var(--accent);
-    box-shadow: inset 2px 0 0 var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg-elev));
+    border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
 }
 .session-row.active .title { color: var(--accent); }
 .session-row.session-fresh {
