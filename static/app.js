@@ -701,7 +701,7 @@
     return {
       agent_path: fd.get("agent_path"),
       model: fd.get("model"),
-      ctx_size: int("ctx_size", 200000),
+      ctx_size: int("ctx_size", 1048576),
       max_tokens: int("max_tokens", 50000),
       think_mode: fd.get("think_mode"),
       mtp_enabled: f.querySelector('[name="mtp_enabled"]').checked,

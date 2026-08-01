@@ -55,7 +55,10 @@ RESTART_KEYS: Set[str] = {
 class Settings:
     agent_path: str = str(DS4_DIR / "ds4-agent")
     model: str = str(DS4_DIR / "ds4flash.gguf")
-    ctx_size: int = 200_000
+    # DeepSeek-V4-Flash is native 1M context, and MLA keeps the KV tiny
+    # (~8 GB at 1M), so the whole 1M allocation fits in ~100 GB on a 128 GB
+    # machine. Default to the full window; dial down for more app headroom.
+    ctx_size: int = 1_048_576
     # Max tokens generated per turn before the agent stops (ds4-agent -n).
     max_tokens: int = 50_000
     think_mode: str = "normal"  # off | normal | max
