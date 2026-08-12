@@ -205,6 +205,7 @@
                         <option value="auto">auto-detect</option>
                         <option value="metal">metal</option>
                         <option value="cuda">cuda</option>
+                        <option value="rocm">rocm</option>
                         <option value="cpu">cpu</option>
                     </select>
                 </label>
@@ -223,6 +224,24 @@
                     <input type="range" name="power" min="1" max="100" step="1" id="power-range" />
                 </label>
                 <p class="hint">Target GPU duty cycle. Lower = cooler/quieter but slower (100% = full speed).</p>
+            </fieldset>
+        </details>
+
+        <details class="adv">
+            <summary>CUDA / ROCm multi-GPU <span class="restart-tag">restart</span></summary>
+            <fieldset>
+                <p class="hint">Only used when the backend above is <code>cuda</code> or <code>rocm</code>. Ignored on Metal, so these are safe to leave set.</p>
+                <label class="row">
+                    <span>GPU devices <span class="hint">(e.g. 0,1)</span></span>
+                    <input type="text" name="gpu_devices" spellcheck="false" placeholder="auto" />
+                </label>
+                <label class="row">
+                    <span>VRAM budgets <span class="hint">(GiB, or auto)</span></span>
+                    <input type="text" name="gpu_vram" spellcheck="false" placeholder="auto" />
+                </label>
+                <label class="row">
+                    <input type="checkbox" name="cuda_tensor_parallel" /> <span>CUDA tensor parallel <span class="hint">— paired tensor/expert path on even multi-GPU</span></span>
+                </label>
             </fieldset>
         </details>
 

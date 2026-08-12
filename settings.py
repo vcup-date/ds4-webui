@@ -46,6 +46,9 @@ RESTART_KEYS: Set[str] = {
     "quality",
     "warm_weights",
     "power",
+    "gpu_devices",
+    "gpu_vram",
+    "cuda_tensor_parallel",
     "ssd_streaming",
     "ssd_cache_experts",
     "ssd_preload_experts",
@@ -76,7 +79,7 @@ class Settings:
     mtp_draft: int = 1
     mtp_margin: float = 3.0  # --mtp-margin verifier margin (MTP mode only)
     # DSpark support GGUF + tuning (used when spec_mode == "dspark").
-    dspark_path: str = str(DS4_DIR / "gguf" / "DeepSeek-V4-Flash-DSpark-support.gguf")
+    dspark_path: str = str(DS4_DIR / "gguf" / "DeepSeek-V4-Flash-DSpark-support-0731.gguf")
     # Confidence pruning threshold 0..1; -1 = agent default (Metal 0.6).
     dspark_confidence: float = -1.0
     # Load DSpark support but keep target-only decode (--dspark-strict).
@@ -94,13 +97,25 @@ class Settings:
     seed: int = 0
 
     # Performance / backend (advanced). backend "auto" = let the agent detect.
-    backend: str = "auto"  # auto | metal | cuda | cpu
+    # Accepted names depend on the build: a Metal build takes metal/cuda/cpu, a
+    # ROCm build takes metal/rocm/cpu. We surface all so ds4-web can drive a
+    # CUDA or ROCm box too (untested here on Metal, but the flags are correct).
+    backend: str = "auto"  # auto | metal | cuda | rocm | cpu
     threads: int = 0       # CPU helper threads; 0 = agent default
     quality: bool = False  # --quality: prefer exact kernels
     warm_weights: bool = False  # --warm-weights: pre-touch tensor pages
     # Target GPU duty cycle percentage (--power, 1..100). 100 = full speed;
     # lower throttles the GPU for cooler/quieter runs. 100 = agent default.
     power: int = 100
+
+    # CUDA / ROCm multi-GPU placement (ignored on Metal). Only emitted when the
+    # backend is cuda or rocm, so they can never break a Metal run.
+    #   gpu_devices - device indices, e.g. "0,1"  (--gpu-devices)
+    #   gpu_vram    - per-device GiB budgets "24,24" or "auto"  (--gpu-vram)
+    gpu_devices: str = ""
+    gpu_vram: str = ""
+    # Paired DeepSeek tensor/expert path on an even multi-GPU CUDA placement.
+    cuda_tensor_parallel: bool = False
 
     # SSD streaming (--ssd-streaming): stream routed experts from disk instead
     # of keeping the whole model resident. This turns "does the model fit in
@@ -160,10 +175,17 @@ class Settings:
             raise ValueError("top_p must be in (0, 1]")
         if not (0 <= self.min_p <= 1):
             raise ValueError("min_p must be in [0, 1]")
-        if self.backend not in ("auto", "metal", "cuda", "cpu"):
-            raise ValueError("backend must be auto|metal|cuda|cpu")
+        if self.backend not in ("auto", "metal", "cuda", "rocm", "cpu"):
+            raise ValueError("backend must be auto|metal|cuda|rocm|cpu")
         if self.threads < 0 or self.threads > 256:
             raise ValueError("threads must be in [0, 256]")
+        # gpu_devices: comma-separated device indices, e.g. "0,1". Empty = auto.
+        if self.gpu_devices and not re.fullmatch(r"\d+(,\d+)*", self.gpu_devices.strip()):
+            raise ValueError("gpu_devices must be indices like 0 or 0,1,2")
+        # gpu_vram: comma-separated GiB budgets ("24,24") or the literal "auto".
+        if self.gpu_vram and self.gpu_vram.strip().lower() != "auto" \
+                and not re.fullmatch(r"\d+(,\d+)*", self.gpu_vram.strip()):
+            raise ValueError("gpu_vram must be 'auto' or GiB budgets like 24,24")
         if self.power < 1 or self.power > 100:
             raise ValueError("power must be in [1, 100]")
         # ssd_cache_experts is either an expert count ("4000") or a GiB budget
@@ -232,6 +254,17 @@ class Settings:
             args.append("--warm-weights")
         if self.power and self.power != 100:
             args += ["--power", str(self.power)]
+
+        # CUDA / ROCm multi-GPU placement. Gated to those backends: --gpu-devices
+        # / --gpu-vram are CUDA/ROCm-only and would be rejected on Metal, and
+        # --cuda-tensor-parallel is CUDA-specific.
+        if self.backend in ("cuda", "rocm"):
+            if self.gpu_devices.strip():
+                args += ["--gpu-devices", self.gpu_devices.strip()]
+            if self.gpu_vram.strip():
+                args += ["--gpu-vram", self.gpu_vram.strip()]
+            if self.backend == "cuda" and self.cuda_tensor_parallel:
+                args.append("--cuda-tensor-parallel")
 
         # SSD streaming. The sub-flags are only meaningful once streaming is on,
         # so keep them gated: passing them standalone would be a no-op at best.

@@ -685,6 +685,9 @@
     check("quality", s.quality);
     check("warm_weights", s.warm_weights);
     set("power", s.power || 100);
+    set("gpu_devices", s.gpu_devices || "");
+    set("gpu_vram", s.gpu_vram || "");
+    check("cuda_tensor_parallel", s.cuda_tensor_parallel);
     check("ssd_streaming", s.ssd_streaming);
     set("ssd_cache_experts", s.ssd_cache_experts || "");
     set("ssd_preload_experts", s.ssd_preload_experts || 0);
@@ -724,6 +727,9 @@
       quality: f.querySelector('[name="quality"]').checked,
       warm_weights: f.querySelector('[name="warm_weights"]').checked,
       power: int("power", 100),
+      gpu_devices: (fd.get("gpu_devices") || "").trim(),
+      gpu_vram: (fd.get("gpu_vram") || "").trim(),
+      cuda_tensor_parallel: f.querySelector('[name="cuda_tensor_parallel"]').checked,
       ssd_streaming: f.querySelector('[name="ssd_streaming"]').checked,
       ssd_cache_experts: (fd.get("ssd_cache_experts") || "").trim(),
       ssd_preload_experts: int("ssd_preload_experts", 0),
