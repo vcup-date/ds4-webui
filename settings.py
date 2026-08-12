@@ -29,10 +29,13 @@ RESTART_KEYS: Set[str] = {
     "ctx_size",
     "max_tokens",
     "think_mode",
+    "spec_mode",
     "mtp_path",
-    "mtp_enabled",
     "mtp_draft",
     "mtp_margin",
+    "dspark_path",
+    "dspark_confidence",
+    "dspark_strict",
     "system_extra",
     "temp",
     "top_p",
@@ -63,10 +66,21 @@ class Settings:
     max_tokens: int = 50_000
     think_mode: str = "normal"  # off | normal | max
 
-    mtp_enabled: bool = True
+    # Speculative decoding accelerator. Both MTP and DSpark load their support
+    # GGUF via --mtp, so they are mutually exclusive: one mode selector.
+    #   mtp    - classic multi-token-prediction draft (the packaged MTP GGUF).
+    #   dspark - DeepSeek's auxiliary draft model for V4 Flash 0731; proposes up
+    #            to 5 tokens, opt-in/experimental, needs its own support GGUF.
+    spec_mode: str = "mtp"  # off | mtp | dspark
     mtp_path: str = str(DS4_DIR / "gguf" / "DeepSeek-V4-Flash-MTP-Q4K-Q8_0-F32.gguf")
     mtp_draft: int = 1
-    mtp_margin: float = 3.0  # --mtp-margin verifier margin
+    mtp_margin: float = 3.0  # --mtp-margin verifier margin (MTP mode only)
+    # DSpark support GGUF + tuning (used when spec_mode == "dspark").
+    dspark_path: str = str(DS4_DIR / "gguf" / "DeepSeek-V4-Flash-DSpark-support.gguf")
+    # Confidence pruning threshold 0..1; -1 = agent default (Metal 0.6).
+    dspark_confidence: float = -1.0
+    # Load DSpark support but keep target-only decode (--dspark-strict).
+    dspark_strict: bool = False
 
     system_extra: str = ""
 
@@ -131,10 +145,15 @@ class Settings:
             raise ValueError("max_tokens must be in [256, 1048576]")
         if self.think_mode not in ("off", "normal", "max"):
             raise ValueError("think_mode must be off|normal|max")
+        if self.spec_mode not in ("off", "mtp", "dspark"):
+            raise ValueError("spec_mode must be off|mtp|dspark")
         if self.mtp_draft < 1 or self.mtp_draft > 4:
             raise ValueError("mtp_draft must be in [1, 4]")
         if self.mtp_margin < 0 or self.mtp_margin > 64:
             raise ValueError("mtp_margin must be in [0, 64]")
+        # -1 = agent default; otherwise a 0..1 pruning threshold.
+        if self.dspark_confidence != -1 and not (0 <= self.dspark_confidence <= 1):
+            raise ValueError("dspark_confidence must be -1 (auto) or in [0, 1]")
         if self.temp < 0 or self.temp > 5:
             raise ValueError("temp must be in [0, 5]")
         if not (0 < self.top_p <= 1):
@@ -174,10 +193,21 @@ class Settings:
         else:
             args.append("--think")
 
-        if self.mtp_enabled and self.mtp_path:
+        # Speculative decoding: MTP and DSpark both pass their support GGUF via
+        # --mtp, then DSpark flips the mode. Exactly one (or none) is active.
+        if self.spec_mode == "mtp" and self.mtp_path:
             args += ["--mtp", self.mtp_path,
                      "--mtp-draft", str(self.mtp_draft),
                      "--mtp-margin", str(self.mtp_margin)]
+        elif self.spec_mode == "dspark" and self.dspark_path:
+            args += ["--mtp", self.dspark_path]
+            if self.dspark_strict:
+                # Strict loads the support model but keeps target-only decode.
+                args.append("--dspark-strict")
+            elif 0 <= self.dspark_confidence <= 1:
+                args += ["--dspark-confidence", str(self.dspark_confidence)]
+            else:
+                args.append("--dspark")
 
         if self.system_extra:
             args += ["-sys", self.system_extra]

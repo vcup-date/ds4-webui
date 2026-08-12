@@ -158,20 +158,36 @@
         </fieldset>
 
         <fieldset>
-            <legend>Speculative decoding (MTP) <span class="restart-tag">restart</span></legend>
+            <legend>Speculative decoding <span class="restart-tag">restart</span></legend>
             <label class="row">
-                <input type="checkbox" name="mtp_enabled" /> <span>enabled <span class="hint">— faster, identical output</span></span>
+                <span>mode</span>
+                <select name="spec_mode">
+                    <option value="off">off</option>
+                    <option value="mtp">MTP</option>
+                    <option value="dspark">DSpark</option>
+                </select>
             </label>
-            <label>draft model GGUF
+            <p class="hint">MTP: classic multi-token draft — faster, identical output. DSpark: DeepSeek's V4-Flash draft model, up to 5 tokens ahead — experimental, wins most on predictable/code output. Each needs its support GGUF below.</p>
+            <label>MTP draft GGUF
                 <input type="text" name="mtp_path" spellcheck="false" />
             </label>
             <label class="row">
-                <span>draft tokens</span>
+                <span>MTP draft tokens</span>
                 <input type="number" name="mtp_draft" min="1" max="4" />
             </label>
             <label class="row">
-                <span>verifier margin</span>
+                <span>MTP verifier margin</span>
                 <input type="number" name="mtp_margin" min="0" max="64" step="0.5" />
+            </label>
+            <label>DSpark support GGUF <span class="hint">(separate download)</span>
+                <input type="text" name="dspark_path" spellcheck="false" />
+            </label>
+            <label class="row">
+                <span>DSpark confidence <span class="hint">(-1 = auto)</span></span>
+                <input type="number" name="dspark_confidence" min="-1" max="1" step="0.05" />
+            </label>
+            <label class="row">
+                <input type="checkbox" name="dspark_strict" /> <span>DSpark strict <span class="hint">— load support, target-only decode</span></span>
             </label>
         </fieldset>
 

@@ -668,10 +668,13 @@
     set("ctx_size", s.ctx_size);
     set("max_tokens", s.max_tokens);
     for (const r of f.querySelectorAll('[name="think_mode"]')) r.checked = (r.value === s.think_mode);
-    check("mtp_enabled", s.mtp_enabled);
+    set("spec_mode", s.spec_mode || "mtp");
     set("mtp_path", s.mtp_path);
     set("mtp_draft", s.mtp_draft);
     set("mtp_margin", s.mtp_margin);
+    set("dspark_path", s.dspark_path || "");
+    set("dspark_confidence", s.dspark_confidence ?? -1);
+    check("dspark_strict", s.dspark_strict);
     set("temp", s.temp);
     set("top_p", s.top_p);
     set("min_p", s.min_p);
@@ -704,10 +707,13 @@
       ctx_size: int("ctx_size", 1048576),
       max_tokens: int("max_tokens", 50000),
       think_mode: fd.get("think_mode"),
-      mtp_enabled: f.querySelector('[name="mtp_enabled"]').checked,
+      spec_mode: fd.get("spec_mode") || "mtp",
       mtp_path: fd.get("mtp_path"),
       mtp_draft: int("mtp_draft", 1),
       mtp_margin: num("mtp_margin", 3),
+      dspark_path: fd.get("dspark_path") || "",
+      dspark_confidence: num("dspark_confidence", -1),
+      dspark_strict: f.querySelector('[name="dspark_strict"]').checked,
       temp: num("temp", 1),
       top_p: num("top_p", 1),
       min_p: num("min_p", 0.05),
